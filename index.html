@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Colon Health Adventure</title>
+    <!-- Link to External CSS -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+        <div id="sidebar">
+            <!-- New Sidebar Image -->
+            <img src="assets/sidebar/sidebarImage.png" alt="Sidebar Image" id="sidebarImage">
+            
+            <h2>Health Tips</h2>
+            <p id="healthTip">Stay tuned for tips!</p>
+        </div>
+        <!-- End Game Report -->
+        <div id="endGameReport" class="hidden">
+            <div id="report-content">
+                <h2>Your Health Report</h2>
+                <p id="reportText"></p>
+                <button id="restartButton">Play Again</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Link to External JavaScript -->
+    <script src="script.js"></script>
+</body>
+</html>
