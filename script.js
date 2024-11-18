@@ -19,7 +19,7 @@ window.addEventListener('resize', () => {
 });
 
 // Game Variables
-let gameSpeed = 2;
+let gameSpeed = 2; // <-- Initial scrolling speed (modifiable)
 let gameFrame = 0;
 const player = {
     x: canvas.width / 2,
@@ -83,7 +83,7 @@ setInterval(() => {
     healthTipElement.textContent = healthTips[currentTipIndex];
 }, 5000);
 
-// Event Listeners for Player Control
+// Event Listeners for Player Control (Keyboard)
 document.addEventListener('keydown', (e) => {
     if(e.key === 'ArrowLeft') keys.left = true;
     if(e.key === 'ArrowRight') keys.right = true;
@@ -93,6 +93,47 @@ document.addEventListener('keyup', (e) => {
     if(e.key === 'ArrowLeft') keys.left = false;
     if(e.key === 'ArrowRight') keys.right = false;
 });
+
+// Touch Control Variables
+let touchStartX = null;
+let touchEndX = null;
+const touchThreshold = 30; // Minimum swipe distance in pixels to register as a move
+
+// Event Listeners for Touch Control
+canvas.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 1) { // Only consider single touch
+        touchStartX = e.touches[0].clientX;
+    }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 1 && touchStartX !== null) { // Only consider single touch
+        touchEndX = e.touches[0].clientX;
+        const deltaX = touchEndX - touchStartX;
+
+        if (Math.abs(deltaX) > touchThreshold) {
+            if (deltaX > 0) {
+                // Swipe Right
+                keys.right = true;
+                keys.left = false;
+            } else {
+                // Swipe Left
+                keys.left = true;
+                keys.right = false;
+            }
+            touchStartX = touchEndX; // Reset touch start position for continuous movement
+        }
+    }
+    e.preventDefault(); // Prevent default scrolling behavior
+}, { passive: false });
+
+canvas.addEventListener('touchend', (e) => {
+    // Reset movement keys when touch ends
+    keys.left = false;
+    keys.right = false;
+    touchStartX = null;
+    touchEndX = null;
+}, { passive: false });
 
 // End Game Report Elements
 const endGameReport = document.getElementById('endGameReport');
@@ -164,7 +205,7 @@ class Item {
         } else {
             // Fallback: Draw a colored circle if image isn't loaded
             ctx.beginPath();
-            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI *2);
             ctx.fillStyle = this.type === 'healthy' ? '#ffeb3b' : '#e57373';
             ctx.fill();
             ctx.closePath();
@@ -215,7 +256,7 @@ function spawnEntities() {
         // Spawn Healthy Item
         const spawningY = -20;
         const wallWidthAtSpawning = getWallWidthAtY(spawningY);
-        const itemRadius = 20; // Should match Item.radius
+        const itemRadius = player.radius;
         const minX = canvas.width / 2 - wallWidthAtSpawning / 2 + itemRadius;
         const maxX = canvas.width / 2 + wallWidthAtSpawning / 2 - itemRadius;
         const x = randomRange(minX, maxX);
@@ -227,7 +268,7 @@ function spawnEntities() {
         // Spawn Unhealthy Obstacle
         const spawningY = -20;
         const wallWidthAtSpawning = getWallWidthAtY(spawningY);
-        const obstacleRadius = 20; // Should match Item.radius
+        const obstacleRadius = player.radius;
         const minX = canvas.width / 2 - wallWidthAtSpawning / 2 + obstacleRadius;
         const maxX = canvas.width / 2 + wallWidthAtSpawning / 2 - obstacleRadius;
         const x = randomRange(minX, maxX);
@@ -246,7 +287,7 @@ function detectCollision(obj1, obj2) {
 
 // Update Player Position
 function updatePlayer() {
-    const speed = 4;
+    const speed = 5; // <-- Player movement speed (modifiable)
     if(keys.left) {
         player.x -= speed;
         // Prevent moving beyond canvas edges; actual boundary handled separately
@@ -362,7 +403,7 @@ function endGame() {
 
 // Reset Game
 function resetGame() {
-    gameSpeed = 2;
+    gameSpeed = 2; // Reset to initial scrolling speed (modifiable)
     gameFrame = 0;
     player.x = canvas.width /2;
     player.y = canvas.height /2;
@@ -394,7 +435,7 @@ function animate() {
     drawHUD();
 
     // Increase game speed gradually
-    gameSpeed += 0.0005;
+    gameSpeed += 0.0005; // <-- Scrolling speed multiplier increment (modifiable)
     gameFrame++;
 
     animationId = requestAnimationFrame(animate);
