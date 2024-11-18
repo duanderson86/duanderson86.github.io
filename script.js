@@ -69,7 +69,7 @@ preloadImages(badImages, 'images/bad', 'bad', 3);
 
 // Health Tips
 const healthTips = [
-    "Fiber helps keep your digestive system healthy.",
+    "Fiber helps keep your digestive system healthy!",
     "Stay hydrated by drinking plenty of water.",
     "Regular exercise benefits your colon health.",
     "Limit red meat consumption for better health.",
