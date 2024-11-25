@@ -1,32 +1,496 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>Colon Health Adventure</title>
-    <!-- Link to External CSS -->
-    <link rel="stylesheet" href="styles.css">
+    <title>Tunnel Runner</title>
+    <style>
+        /* Your existing CSS remains unchanged */
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: Arial, sans-serif;
+        }
+        #gameCanvas {
+            background: #111;
+        }
+        #gameOver {
+            position: absolute;
+            color: white;
+            text-align: center;
+            display: none;
+            font-size: 24px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 5;
+        }
+        #score {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: white;
+            font-size: 24px;
+            z-index: 5;
+        }
+        /* Splash Screen Styles */
+        #splashScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000; /* Optional: Background color */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10; /* Above all other elements */
+            cursor: pointer; /* Indicates it's clickable */
+        }
+        #splashScreen img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain; /* Maintains aspect ratio */
+        }
+        /* Mute Button Styles */
+        #muteButton {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 6;
+            padding: 10px 20px;
+            cursor: pointer;
+            background-color: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        #muteButton:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+    </style>
 </head>
 <body>
-    <div id="game-container">
-        <canvas id="gameCanvas"></canvas>
-        <div id="sidebar">
-            <!-- New Sidebar Image -->
-            <img src="assets/sidebar/sidebarImage.png" alt="Sidebar Image" id="sidebarImage">
-            
-            <h2>Health Tips</h2>
-            <p id="healthTip">Stay tuned for tips!</p>
-        </div>
-        <!-- End Game Report -->
-        <div id="endGameReport" class="hidden">
-            <div id="report-content">
-                <h2>Your Health Report</h2>
-                <p id="reportText"></p>
-                <button id="restartButton">Play Again</button>
-            </div>
-        </div>
+    <canvas id="gameCanvas"></canvas>
+    <div id="score">Score: 0</div>
+    <div id="gameOver">
+        Game Over!<br>
+        Final Score: <span id="finalScore">0</span><br>
+        Click Here to restart
+    </div>
+    <!-- Splash Screen -->
+    <div id="splashScreen">
+        <img src="splash/splash.png" alt="Splash Screen">
     </div>
 
-    <!-- Link to External JavaScript -->
-    <script src="script.js"></script>
+    <!-- Mute/Unmute Button -->
+    <button id="muteButton">Mute</button>
+
+    <!-- Background Audio -->
+    <audio id="backgroundMusic" loop preload="auto"></audio>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const gameOverElement = document.getElementById('gameOver');
+        const finalScoreElement = document.getElementById('finalScore');
+        const splashScreen = document.getElementById('splashScreen');
+        const backgroundMusic = document.getElementById('backgroundMusic'); // Reference to audio
+        const muteButton = document.getElementById('muteButton');
+
+        // List of available background music tracks
+        const musicTracks = [
+            'music/song1.mp3',
+            'music/song2.mp3',
+            'music/song3.mp3'
+            // Add more tracks as needed
+        ];
+
+        // Function to select a random music track
+        function getRandomMusicTrack() {
+            const randomIndex = Math.floor(Math.random() * musicTracks.length);
+            return musicTracks[randomIndex];
+        }
+
+        // Game variables
+        let gameLoopId;
+        let score = 0;
+        let speed = 4;
+        let playerX = 0; // Will be set in resizeCanvas
+        let playerY = 0; // Will be set in resizeCanvas
+        let isGameOver = false;
+        let tunnelSections = [];
+        let items = [];
+        let lastTunnelCenter = 0; // Will be set in resizeCanvas
+        const baseWidth = 300;
+
+        // Tunnel movement control
+        let currentNoiseOffset = 0;
+        let targetWidth = baseWidth;
+        let currentWidth = baseWidth;
+        let widthNoiseOffset = 0;
+
+        // Player properties
+        const playerSize = 25;
+
+        // Item size
+        const itemSize = 50;
+
+        // Image loading flags
+        let imagesLoaded = false;
+
+        // Preload images
+        const goodImages = [];
+        const badImages = [];
+
+        // Function to load images
+        function loadImages(imagePaths) {
+            return Promise.all(imagePaths.map(path => {
+                return new Promise((resolve, reject) => {
+                    const img = new Image();
+                    img.onload = () => resolve(img);
+                    img.onerror = () => {
+                        console.error(`Failed to load image: ${path}`);
+                        reject(new Error(`Failed to load image: ${path}`));
+                    };
+                    img.src = path;
+                });
+            }));
+        }
+
+        // Load all images before starting the game
+        async function loadAllImages() {
+            // Assuming there are 3 images in each folder named good1.png to good3.png and bad1.png to bad3.png
+            const goodImagePaths = [];
+            const badImagePaths = [];
+
+            for (let i = 1; i <= 3; i++) {
+                goodImagePaths.push(`good/good${i}.png`);
+                badImagePaths.push(`bad/bad${i}.png`);
+            }
+
+            try {
+                const loadedGoodImages = await loadImages(goodImagePaths);
+                const loadedBadImages = await loadImages(badImagePaths);
+                goodImages.push(...loadedGoodImages);
+                badImages.push(...loadedBadImages);
+                console.log('All images loaded successfully.');
+                imagesLoaded = true;
+                // Optionally, you can add a visual indicator that images are loaded
+            } catch (error) {
+                console.error('Error loading images:', error);
+            }
+        }
+
+        // Perlin noise implementation for smooth random movement
+        const perlin = {
+            rand_vect: function(){
+                let theta = Math.random() * 2 * Math.PI;
+                return {x: Math.cos(theta), y: Math.sin(theta)};
+            },
+            dot_prod_grid: function(x, y, vx, vy){
+                let g_vect;
+                let d_vect = {x: x - vx, y: y - vy};
+                if (this.gradients[`${vx},${vy}`]){
+                    g_vect = this.gradients[`${vx},${vy}`];
+                } else {
+                    g_vect = this.rand_vect();
+                    this.gradients[`${vx},${vy}`] = g_vect;
+                }
+                return d_vect.x * g_vect.x + d_vect.y * g_vect.y;
+            },
+            smootherstep: function(x){
+                return 6*Math.pow(x,5) - 15*Math.pow(x,4) + 10*Math.pow(x,3);
+            },
+            interp: function(x, a, b){
+                return a + this.smootherstep(x) * (b - a);
+            },
+            seed: function(){
+                this.gradients = {};
+                this.memory = {};
+            },
+            get: function(x, y) {
+                const key = `${x},${y}`;
+                if (this.memory.hasOwnProperty(key))
+                    return this.memory[key];
+                let xf = Math.floor(x);
+                let yf = Math.floor(y);
+                //interpolate
+                let tl = this.dot_prod_grid(x, y, xf,   yf);
+                let tr = this.dot_prod_grid(x, y, xf+1, yf);
+                let bl = this.dot_prod_grid(x, y, xf,   yf+1);
+                let br = this.dot_prod_grid(x, y, xf+1, yf+1);
+                let xt = this.interp(x - xf, tl, tr);
+                let xb = this.interp(x - xf, bl, br);
+                let v = this.interp(y - yf, xt, xb);
+                this.memory[key] = v;
+                return v;
+            }
+        }
+        perlin.seed();
+
+        class TunnelSection {
+            constructor(y) {
+                // Use Perlin noise for smooth center movement
+                currentNoiseOffset += 0.02;
+                const noise = perlin.get(currentNoiseOffset, 0);
+                const centerOffset = noise * canvas.width * 0.4; // 40% of screen width
+                this.center = (canvas.width / 2) + centerOffset;
+                
+                // Use separate Perlin noise for width variation
+                widthNoiseOffset += 0.01;
+                const widthNoise = perlin.get(widthNoiseOffset, 1);
+                targetWidth = baseWidth * (1 + widthNoise * 0.5); // 50% variation
+                currentWidth += (targetWidth - currentWidth) * 0.1;
+                this.width = currentWidth;
+                
+                this.y = y;
+                
+                // Keep tunnel within bounds
+                const minX = this.width / 2;
+                const maxX = canvas.width - this.width / 2;
+                this.center = Math.max(minX, Math.min(maxX, this.center));
+                
+                lastTunnelCenter = this.center;
+            }
+
+            draw() {
+                // Draw the tunnel area in a lighter color
+                ctx.fillStyle = '#222';
+                ctx.beginPath();
+                ctx.moveTo(this.center - this.width / 2, this.y);
+                ctx.lineTo(this.center + this.width / 2, this.y);
+                ctx.lineTo(this.center + this.width / 2, this.y + 5);
+                ctx.lineTo(this.center - this.width / 2, this.y + 5);
+                ctx.closePath();
+                ctx.fill();
+
+                // Draw the walls in a darker color
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, this.y, this.center - this.width / 2, 5);
+                ctx.fillRect(this.center + this.width / 2, this.y, canvas.width - (this.center + this.width / 2), 5);
+            }
+
+            update() {
+                this.y += speed;
+                return this.y < canvas.height;
+            }
+        }
+
+        class Item {
+            constructor(x, y, isGood) {
+                this.x = x;
+                this.y = y;
+                this.isGood = isGood;
+                this.size = itemSize;
+                this.collected = false;
+
+                const imageArray = isGood ? goodImages : badImages;
+                const randomIndex = Math.floor(Math.random() * imageArray.length);
+                this.image = imageArray[randomIndex];
+            }
+
+            draw() {
+                if (this.collected) return;
+                if (this.image.complete) { // Ensure image is loaded
+                    ctx.drawImage(this.image, this.x - this.size / 2, this.y - this.size / 2, this.size, this.size);
+                } else {
+                    // Draw a placeholder if image isn't loaded
+                    ctx.fillStyle = this.isGood ? '#0f0' : '#f00';
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size / 2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            update() {
+                this.y += speed;
+                return this.y < canvas.height + this.size && !this.collected;
+            }
+
+            checkCollision(playerX, playerY) {
+                if (this.collected) return false;
+                const distance = Math.sqrt(
+                    Math.pow(this.x - playerX, 2) + 
+                    Math.pow(this.y - playerY, 2)
+                );
+                return distance < (this.size / 2 + playerSize / 2);
+            }
+        }
+
+        function spawnTunnelSection() {
+            if (tunnelSections.length === 0 || 
+                tunnelSections[tunnelSections.length - 1].y > 5) {
+                const section = new TunnelSection(-5);
+                tunnelSections.push(section);
+
+                if (Math.random() < 0.075) {
+                    const isGood = Math.random() < 0.5;
+                    const x = section.center + (Math.random() - 0.5) * (section.width - itemSize - 20);
+                    items.push(new Item(x, -itemSize / 2, isGood));
+                }
+            }
+        }
+
+        function drawPlayer() {
+            ctx.fillStyle = '#4488ff';
+            ctx.beginPath();
+            ctx.arc(playerX, playerY, playerSize / 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function checkCollisions() {
+            const playerSection = tunnelSections.find(section => 
+                Math.abs(section.y - playerY) < 5
+            );
+
+            if (playerSection) {
+                const leftWall = playerSection.center - playerSection.width / 2;
+                const rightWall = playerSection.center + playerSection.width / 2;
+                
+                if (playerX - playerSize / 2 < leftWall || 
+                    playerX + playerSize / 2 > rightWall) {
+                    gameOver();
+                }
+            }
+
+            items.forEach(item => {
+                if (item.checkCollision(playerX, playerY)) {
+                    item.collected = true;
+                    score += item.isGood ? 100 : -50;
+                    scoreElement.textContent = `Score: ${score}`;
+                }
+            });
+        }
+
+        function gameOver() {
+            isGameOver = true;
+            cancelAnimationFrame(gameLoopId);
+            finalScoreElement.textContent = score;
+            gameOverElement.style.display = 'block';
+            console.log('Game Over');
+            // Optionally pause the music
+            backgroundMusic.pause();
+        }
+
+        function update() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            spawnTunnelSection();
+            tunnelSections = tunnelSections.filter(section => section.update());
+            tunnelSections.forEach(section => section.draw());
+            
+            items = items.filter(item => item.update());
+            items.forEach(item => item.draw());
+            
+            drawPlayer();
+            checkCollisions();
+            
+            score++;
+            speed = 4 + Math.floor(score / 1000) * 0.5;
+            scoreElement.textContent = `Score: ${score}`;
+            
+            // Continue the game loop
+            if (!isGameOver) {
+                gameLoopId = requestAnimationFrame(update);
+            }
+        }
+
+        function startGame() {
+            tunnelSections = [];
+            items = [];
+            score = 0;
+            speed = 4;
+            playerX = canvas.width / 2;
+            playerY = canvas.height - 50; // Reset playerY
+            lastTunnelCenter = canvas.width / 2;
+            currentNoiseOffset = 0;
+            widthNoiseOffset = 0;
+            currentWidth = baseWidth;
+            targetWidth = baseWidth;
+            perlin.seed();
+            isGameOver = false;
+            gameOverElement.style.display = 'none';
+            scoreElement.textContent = `Score: ${score}`;
+            console.log('Game Started');
+
+            // Select a random music track
+            const selectedTrack = getRandomMusicTrack();
+            backgroundMusic.src = selectedTrack;
+
+            // Play background music
+            backgroundMusic.currentTime = 0; // Reset to start
+            backgroundMusic.play().catch(error => {
+                console.error('Failed to play background music:', error);
+            });
+
+            // Start the game loop
+            gameLoopId = requestAnimationFrame(update);
+        }
+
+        function movePlayer(e) {
+            if (!isGameOver) {
+                const rect = canvas.getBoundingClientRect();
+                const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+                if (clientX !== undefined) {
+                    playerX = clientX - rect.left;
+                    // Clamp playerX within canvas
+                    playerX = Math.max(playerSize / 2, Math.min(canvas.width - playerSize / 2, playerX));
+                }
+            }
+        }
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            playerY = canvas.height - 50; // Update playerY when resizing
+            if (isGameOver) {
+                // Reposition gameOverElement if necessary
+                gameOverElement.style.top = `${canvas.height / 2 - 50}px`;
+                gameOverElement.style.left = `${canvas.width / 2}px`;
+                gameOverElement.style.transform = `translate(-50%, -50%)`;
+            }
+        }
+
+        // Mute/Unmute Button Functionality
+        muteButton.addEventListener('click', () => {
+            backgroundMusic.muted = !backgroundMusic.muted;
+            muteButton.textContent = backgroundMusic.muted ? 'Unmute' : 'Mute';
+        });
+
+        // Event listeners
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas(); // Initial call to set up canvas size and playerY
+        canvas.addEventListener('mousemove', movePlayer);
+        canvas.addEventListener('touchmove', movePlayer);
+        gameOverElement.addEventListener('click', () => {
+            if (isGameOver) startGame();
+        });
+
+        // Splash Screen Click Listener
+        splashScreen.addEventListener('click', () => {
+            if (imagesLoaded && !isGameOver) {
+                splashScreen.style.display = 'none';
+                startGame();
+            } else if (!imagesLoaded) {
+                // Optionally, inform the user that images are still loading
+                alert('Images are still loading. Please wait a moment.');
+            }
+        });
+
+        // Audio Error Handling
+        backgroundMusic.addEventListener('error', (e) => {
+            console.error('Error loading the audio track:', e);
+            alert('Failed to load background music.');
+        });
+
+        // Start loading images
+        loadAllImages();
+    </script>
 </body>
 </html>
